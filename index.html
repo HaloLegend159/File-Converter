@@ -4,6 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Universal File Converter</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script>
+        // Configure PDF.js worker
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    </script>
     <style>
         * {
             margin: 0;
@@ -208,23 +213,6 @@
             background: #218838;
         }
 
-        .format-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-            gap: 10px;
-            margin-top: 10px;
-        }
-
-        .format-badge {
-            background: #f0f2ff;
-            padding: 8px;
-            border-radius: 6px;
-            text-align: center;
-            font-size: 0.85em;
-            color: #667eea;
-            font-weight: 600;
-        }
-
         .category-tabs {
             display: flex;
             gap: 10px;
@@ -270,7 +258,7 @@
         <div class="upload-area" id="uploadArea">
             <div class="upload-icon">📁</div>
             <p><strong>Click to upload</strong> or drag and drop your file here</p>
-            <p style="font-size: 0.9em; color: #999; margin-top: 10px;">Supports images, audio, video, and documents</p>
+            <p style="font-size: 0.9em; color: #999; margin-top: 10px;">Supports images, audio, video, PDFs, and documents</p>
             <input type="file" id="fileInput" accept="*/*">
         </div>
 
@@ -283,9 +271,10 @@
 
         <div class="category-tabs" id="categoryTabs" style="display: none;">
             <button class="category-tab active" data-category="image">🖼️ Image</button>
-            <button class="category-tab" data-category="audio">🎵 Audio</button>
+            <button class="category-tab" data-category="pdf">📄 PDF</button>
             <button class="category-tab" data-category="video">🎬 Video</button>
-            <button class="category-tab" data-category="document">📄 Document</button>
+            <button class="category-tab" data-category="audio">🎵 Audio</button>
+            <button class="category-tab" data-category="document">📝 Document</button>
         </div>
 
         <div class="format-section" id="formatSection" style="display: none;">
@@ -315,16 +304,20 @@
                 mimeTypes: ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/bmp', 'image/svg+xml', 'image/tiff']
             },
             audio: {
-                extensions: ['mp3', 'wav', 'ogg', 'aac', 'm4a', 'flac', 'wma'],
-                mimeTypes: ['audio/mpeg', 'audio/wav', 'audio/ogg', 'audio/aac', 'audio/m4a', 'audio/flac', 'audio/x-ms-wma']
+                extensions: ['mp3', 'wav', 'ogg', 'aac', 'm4a', 'flac'],
+                mimeTypes: ['audio/mpeg', 'audio/wav', 'audio/ogg', 'audio/aac', 'audio/m4a', 'audio/flac']
             },
             video: {
-                extensions: ['mp4', 'webm', 'avi', 'mov', 'mkv', 'flv', 'wmv', 'mpeg'],
+                extensions: ['mp4', 'webm', 'avi', 'mov', 'mkv', 'flv'],
                 mimeTypes: ['video/mp4', 'video/webm', 'video/x-msvideo', 'video/quicktime', 'video/x-matroska', 'video/x-flv']
             },
             document: {
-                extensions: ['pdf', 'txt', 'doc', 'docx', 'rtf', 'odt'],
-                mimeTypes: ['application/pdf', 'text/plain', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document']
+                extensions: ['txt', 'doc', 'docx', 'rtf', 'odt'],
+                mimeTypes: ['text/plain', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document']
+            },
+            pdf: {
+                extensions: ['pdf'],
+                mimeTypes: ['application/pdf']
             }
         };
 
@@ -396,7 +389,7 @@
                 convertBtn.disabled = false;
                 errorMessage.classList.remove('show');
             } else {
-                showError('Unsupported file type. Please upload an image, audio, video, or document file.');
+                showError('Unsupported file type. Please upload an image, audio, video, PDF, or document file.');
                 categoryTabs.style.display = 'none';
                 formatSection.style.display = 'none';
                 convertBtn.disabled = true;
@@ -425,19 +418,49 @@
         }
 
         function updateFormatOptions() {
-            const formats = formatsByCategory[currentCategory].extensions;
             const currentExt = currentFile.name.split('.').pop().toLowerCase();
             
             outputFormat.innerHTML = '<option value="">Select output format...</option>';
             
-            formats.forEach(format => {
-                if (format !== currentExt) {
+            // Special handling for PDF - can convert to images
+            if (currentCategory === 'pdf') {
+                ['png', 'jpg', 'jpeg', 'webp'].forEach(format => {
                     const option = document.createElement('option');
                     option.value = format;
                     option.textContent = format.toUpperCase();
                     outputFormat.appendChild(option);
-                }
-            });
+                });
+            }
+            // Special handling for video - can extract audio
+            else if (currentCategory === 'video') {
+                // Video to audio formats
+                ['mp3', 'wav', 'ogg'].forEach(format => {
+                    const option = document.createElement('option');
+                    option.value = format;
+                    option.textContent = format.toUpperCase() + ' (audio)';
+                    outputFormat.appendChild(option);
+                });
+                // Video to video formats
+                formatsByCategory[currentCategory].extensions.forEach(format => {
+                    if (format !== currentExt) {
+                        const option = document.createElement('option');
+                        option.value = format;
+                        option.textContent = format.toUpperCase();
+                        outputFormat.appendChild(option);
+                    }
+                });
+            }
+            else {
+                const formats = formatsByCategory[currentCategory].extensions;
+                formats.forEach(format => {
+                    if (format !== currentExt) {
+                        const option = document.createElement('option');
+                        option.value = format;
+                        option.textContent = format.toUpperCase();
+                        outputFormat.appendChild(option);
+                    }
+                });
+            }
         }
 
         // Category tab switching
@@ -510,35 +533,207 @@
 
         async function convertFile(file, targetFormat) {
             return new Promise((resolve, reject) => {
-                const reader = new FileReader();
-                
-                reader.onload = function(e) {
-                    try {
-                        if (currentCategory === 'image') {
-                            convertImage(e.target.result, targetFormat, file.name, resolve, reject);
-                        } else if (currentCategory === 'audio') {
-                            convertAudio(file, targetFormat, resolve, reject);
-                        } else if (currentCategory === 'video') {
-                            // Video conversion requires server-side processing
-                            showError('Video conversion requires server-side processing. This is a client-side demo.');
-                            reject(new Error('Video conversion not supported in browser'));
-                        } else if (currentCategory === 'document') {
-                            // Document conversion is limited in browser
-                            convertDocument(e.target.result, targetFormat, file.name, resolve, reject);
-                        }
-                    } catch (error) {
-                        reject(error);
-                    }
-                };
-                
-                reader.onerror = () => reject(new Error('Failed to read file'));
-                
-                if (currentCategory === 'audio') {
+                if (currentCategory === 'image') {
+                    const reader = new FileReader();
+                    reader.onload = (e) => convertImage(e.target.result, targetFormat, file.name, resolve, reject);
+                    reader.onerror = () => reject(new Error('Failed to read file'));
+                    reader.readAsDataURL(file);
+                } 
+                else if (currentCategory === 'pdf') {
+                    const reader = new FileReader();
+                    reader.onload = (e) => convertPDF(e.target.result, targetFormat, file.name, resolve, reject);
+                    reader.onerror = () => reject(new Error('Failed to read file'));
                     reader.readAsArrayBuffer(file);
-                } else {
+                } 
+                else if (currentCategory === 'video') {
+                    // Check if converting to audio
+                    if (['mp3', 'wav', 'ogg'].includes(targetFormat)) {
+                        extractAudioFromVideo(file, targetFormat, resolve, reject);
+                    } else {
+                        showError('Video-to-video conversion requires server-side processing.');
+                        reject(new Error('Video conversion not supported'));
+                    }
+                }
+                else if (currentCategory === 'audio') {
+                    convertAudio(file, targetFormat, resolve, reject);
+                }
+                else if (currentCategory === 'document') {
+                    const reader = new FileReader();
+                    reader.onload = (e) => convertDocument(e.target.result, targetFormat, file.name, resolve, reject);
+                    reader.onerror = () => reject(new Error('Failed to read file'));
                     reader.readAsDataURL(file);
                 }
             });
+        }
+
+        async function convertPDF(arrayBuffer, targetFormat, originalName, resolve, reject) {
+            try {
+                const pdf = await pdfjsLib.getDocument({data: arrayBuffer}).promise;
+                const page = await pdf.getPage(1); // Get first page
+                
+                const scale = 2.0; // Higher quality
+                const viewport = page.getViewport({scale: scale});
+                
+                const canvas = document.createElement('canvas');
+                const context = canvas.getContext('2d');
+                canvas.height = viewport.height;
+                canvas.width = viewport.width;
+                
+                await page.render({
+                    canvasContext: context,
+                    viewport: viewport
+                }).promise;
+                
+                const mimeType = 'image/' + (targetFormat === 'jpg' ? 'jpeg' : targetFormat);
+                
+                canvas.toBlob(function(blob) {
+                    const url = URL.createObjectURL(blob);
+                    const baseName = originalName.substring(0, originalName.lastIndexOf('.'));
+                    downloadBtn.href = url;
+                    downloadBtn.download = baseName + '_page1.' + targetFormat;
+                    resolve();
+                }, mimeType, 0.95);
+            } catch (error) {
+                reject(error);
+            }
+        }
+
+        function extractAudioFromVideo(file, targetFormat, resolve, reject) {
+            const video = document.createElement('video');
+            const url = URL.createObjectURL(file);
+            
+            video.src = url;
+            video.muted = true;
+            
+            video.addEventListener('loadedmetadata', async () => {
+                try {
+                    // Create audio context
+                    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                    const source = audioContext.createMediaElementSource(video);
+                    const dest = audioContext.createMediaStreamDestination();
+                    source.connect(dest);
+                    source.connect(audioContext.destination);
+                    
+                    // Create media recorder
+                    const mediaRecorder = new MediaRecorder(dest.stream);
+                    const chunks = [];
+                    
+                    mediaRecorder.ondataavailable = (e) => {
+                        if (e.data.size > 0) {
+                            chunks.push(e.data);
+                        }
+                    };
+                    
+                    mediaRecorder.onstop = async () => {
+                        const audioBlob = new Blob(chunks, { type: 'audio/webm' });
+                        
+                        if (targetFormat === 'wav') {
+                            // Convert to WAV
+                            const arrayBuffer = await audioBlob.arrayBuffer();
+                            const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+                            const wavBlob = audioBufferToWav(audioBuffer);
+                            
+                            const downloadUrl = URL.createObjectURL(wavBlob);
+                            const baseName = file.name.substring(0, file.name.lastIndexOf('.'));
+                            downloadBtn.href = downloadUrl;
+                            downloadBtn.download = baseName + '.wav';
+                        } else {
+                            // For other formats, just save the blob
+                            const downloadUrl = URL.createObjectURL(audioBlob);
+                            const baseName = file.name.substring(0, file.name.lastIndexOf('.'));
+                            downloadBtn.href = downloadUrl;
+                            downloadBtn.download = baseName + '.' + targetFormat;
+                        }
+                        
+                        URL.revokeObjectURL(url);
+                        resolve();
+                    };
+                    
+                    // Start recording
+                    mediaRecorder.start();
+                    video.play();
+                    
+                    // Stop after video ends
+                    video.addEventListener('ended', () => {
+                        mediaRecorder.stop();
+                        video.pause();
+                    });
+                    
+                } catch (error) {
+                    reject(error);
+                }
+            });
+            
+            video.addEventListener('error', () => {
+                reject(new Error('Failed to load video'));
+            });
+        }
+
+        function audioBufferToWav(audioBuffer) {
+            const numberOfChannels = audioBuffer.numberOfChannels;
+            const sampleRate = audioBuffer.sampleRate;
+            const format = 1; // PCM
+            const bitDepth = 16;
+            
+            const bytesPerSample = bitDepth / 8;
+            const blockAlign = numberOfChannels * bytesPerSample;
+            
+            const data = [];
+            for (let i = 0; i < audioBuffer.numberOfChannels; i++) {
+                data.push(audioBuffer.getChannelData(i));
+            }
+            
+            const interleaved = interleave(data);
+            const dataLength = interleaved.length * bytesPerSample;
+            const buffer = new ArrayBuffer(44 + dataLength);
+            const view = new DataView(buffer);
+            
+            // Write WAV header
+            writeString(view, 0, 'RIFF');
+            view.setUint32(4, 36 + dataLength, true);
+            writeString(view, 8, 'WAVE');
+            writeString(view, 12, 'fmt ');
+            view.setUint32(16, 16, true);
+            view.setUint16(20, format, true);
+            view.setUint16(22, numberOfChannels, true);
+            view.setUint32(24, sampleRate, true);
+            view.setUint32(28, sampleRate * blockAlign, true);
+            view.setUint16(32, blockAlign, true);
+            view.setUint16(34, bitDepth, true);
+            writeString(view, 36, 'data');
+            view.setUint32(40, dataLength, true);
+            
+            // Write audio data
+            floatTo16BitPCM(view, 44, interleaved);
+            
+            return new Blob([buffer], { type: 'audio/wav' });
+        }
+        
+        function interleave(channelData) {
+            const length = channelData[0].length;
+            const numberOfChannels = channelData.length;
+            const result = new Float32Array(length * numberOfChannels);
+            
+            let offset = 0;
+            for (let i = 0; i < length; i++) {
+                for (let channel = 0; channel < numberOfChannels; channel++) {
+                    result[offset++] = channelData[channel][i];
+                }
+            }
+            return result;
+        }
+        
+        function writeString(view, offset, string) {
+            for (let i = 0; i < string.length; i++) {
+                view.setUint8(offset + i, string.charCodeAt(i));
+            }
+        }
+        
+        function floatTo16BitPCM(view, offset, input) {
+            for (let i = 0; i < input.length; i++, offset += 2) {
+                const s = Math.max(-1, Math.min(1, input[i]));
+                view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
+            }
         }
 
         function convertImage(dataUrl, targetFormat, originalName, resolve, reject) {
@@ -575,18 +770,14 @@
             downloadBtn.href = url;
             downloadBtn.download = baseName + '.' + targetFormat;
             
-            // Note: This doesn't actually convert the audio codec
-            statusMessage.textContent = 'Note: Audio conversion in browser is limited. For full conversion, use server-side tools.';
+            statusMessage.textContent = 'Note: Audio codec conversion is limited in browser.';
             resolve();
         }
 
         function convertDocument(dataUrl, targetFormat, originalName, resolve, reject) {
-            // Document conversion is very limited in browser
-            // This is mainly for demonstration
             const baseName = originalName.substring(0, originalName.lastIndexOf('.'));
             
             if (targetFormat === 'txt') {
-                // If converting to text, we can at least strip formatting
                 fetch(dataUrl)
                     .then(res => res.blob())
                     .then(blob => {
@@ -597,7 +788,7 @@
                     })
                     .catch(reject);
             } else {
-                showError('Document conversion requires server-side processing. This is a client-side demo.');
+                showError('Document conversion requires server-side processing.');
                 reject(new Error('Document conversion not supported in browser'));
             }
         }
@@ -610,7 +801,6 @@
                 'aac': 'audio/aac',
                 'm4a': 'audio/m4a',
                 'flac': 'audio/flac',
-                'wma': 'audio/x-ms-wma',
                 'mp4': 'video/mp4',
                 'webm': 'video/webm',
                 'avi': 'video/x-msvideo',
