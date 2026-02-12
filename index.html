@@ -386,6 +386,25 @@
                 currentCategory = detectedCategory;
                 categoryTabs.style.display = 'flex';
                 updateCategoryTabs();
+                
+                // For PDFs, disable category switching since PDF can only convert to images
+                if (detectedCategory === 'pdf') {
+                    document.querySelectorAll('.category-tab').forEach(tab => {
+                        if (tab.dataset.category !== 'pdf') {
+                            tab.style.opacity = '0.5';
+                            tab.style.cursor = 'not-allowed';
+                            tab.disabled = true;
+                        }
+                    });
+                } else {
+                    // Re-enable all tabs for other file types
+                    document.querySelectorAll('.category-tab').forEach(tab => {
+                        tab.style.opacity = '1';
+                        tab.style.cursor = 'pointer';
+                        tab.disabled = false;
+                    });
+                }
+                
                 updateFormatOptions();
                 formatSection.style.display = 'block';
                 convertBtn.disabled = false;
@@ -474,6 +493,7 @@
         // Category tab switching
         document.querySelectorAll('.category-tab').forEach(tab => {
             tab.addEventListener('click', () => {
+                if (tab.disabled) return; // Don't switch if disabled
                 currentCategory = tab.dataset.category;
                 updateCategoryTabs();
                 updateFormatOptions();
